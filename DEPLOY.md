@@ -62,7 +62,9 @@ Opcional: importar o `render.yaml` na raiz do repo (Blueprint).
 
 | Variável | Valor |
 |----------|--------|
-| `NEXT_PUBLIC_API_URL` | `https://SEU-SERVICO.onrender.com/api` |
+| `NEXT_PUBLIC_API_URL` | `https://SEU-SERVICO.onrender.com/api` (obrigatório o sufixo `/api`) |
+
+Se o login retornar **Cannot POST /auth/login**, a URL está sem `/api` — redeploy o frontend após corrigir.
 
 4. **Deploy**.
 5. Copie a URL gerada (ex. `https://japa-insufilm.vercel.app`) e atualize na Render:

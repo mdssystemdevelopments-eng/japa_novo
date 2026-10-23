@@ -1,5 +1,15 @@
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
+/** Garante prefixo /api (Nest global prefix). Evita POST /auth/login em vez de /api/auth/login. */
+export function resolveApiBase(): string {
+  const raw = (
+    process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  if (raw.endsWith('/api')) return raw;
+  return `${raw}/api`;
+}
+
+const API_URL = resolveApiBase();
 
 export class ApiError extends Error {
   constructor(

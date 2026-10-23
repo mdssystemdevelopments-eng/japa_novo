@@ -15,6 +15,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { FinanceModule } from './finance/finance.module';
+import { CutAutomotiveModule } from './cut-automotive/cut-automotive.module';
 import { HealthModule } from './health/health.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from './auth/guards/permissions.guard';
@@ -46,6 +47,7 @@ import { WorkOrdersModule } from './work-orders/work-orders.module';
     AppointmentsModule,
     WorkOrdersModule,
     FinanceModule,
+    CutAutomotiveModule,
     DashboardModule,
     AuditModule,
   ],

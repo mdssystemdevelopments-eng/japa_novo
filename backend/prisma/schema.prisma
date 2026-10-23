@@ -154,6 +154,10 @@ model Company {
   bobinas            Bobina[]
   stockMovements     StockMovement[]
   suppliers          Supplier[]
+  cutVehicleCatalogs CutVehicleCatalog[]
+  cutPatterns        CutPattern[]
+  cutPlotterProfiles CutPlotterProfile[]
+  cutJobs            CutJob[]
 
   @@map("companies")
 }
@@ -299,6 +303,7 @@ model Customer {
   appointments Appointment[]
   workOrders   WorkOrder[]
   receivables  AccountReceivable[]
+  cutJobs      CutJob[]
 
   @@index([companyId, name])
   @@index([companyId, document])
@@ -340,6 +345,7 @@ model Vehicle {
   quotes       Quote[]
   appointments Appointment[]
   workOrders   WorkOrder[]
+  cutJobs      CutJob[]
 
   @@unique([companyId, plate])
   @@index([companyId, customerId])
@@ -373,6 +379,7 @@ model Product {
   movements           StockMovement[]
   goodsReceiptItems     GoodsReceiptItem[]
   workOrderMaterials    WorkOrderMaterial[]
+  cutJobs               CutJob[]
 
   @@unique([companyId, internalCode])
   @@index([companyId, name])
@@ -517,6 +524,7 @@ model WorkOrder {
   appointment Appointment?           @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   items       WorkOrderItem[]
   materials   WorkOrderMaterial[]
+  cutJobs     CutJob[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
@@ -704,4 +712,241 @@ model WhatsappMessage {
 
   @@index([configId, status])
   @@map("whatsapp_messages")
+}
+
+enum CutApplicationType {
+  INSULFILM
+  PPF
+  BOTH
+}
+
+enum CutPieceCategory {
+  WINDSHIELD
+  REAR_GLASS
+  FRONT_SIDE_LEFT
+  FRONT_SIDE_RIGHT
+  REAR_SIDE_LEFT
+  REAR_SIDE_RIGHT
+  FIXED_GLASS
+  HOOD
+  FENDER
+  BUMPER
+  DOOR
+  MIRROR
+  OTHER
+}
+
+enum CutPatternStatus {
+  IMPORTED
+  DRAFT
+  PENDING_VALIDATION
+  APPROVED
+  ARCHIVED
+}
+
+enum CutJobStatus {
+  DRAFT
+  PREPARED
+  NESTED
+  READY_EXPORT
+  SIMULATED
+  SENT
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum CutPlotterIntegrationMode {
+  FILE_EXPORT_ONLY
+  SIMULATION
+}
+
+enum CutJobFilePurpose {
+  EXPORT
+  PREVIEW
+  DIAGNOSTIC
+}
+
+model CutVehicleCatalog {
+  id               String              @id @default(uuid())
+  companyId        String              @map("company_id")
+  manufacturer     String
+  model            String
+  yearFrom         Int?                @map("year_from")
+  yearTo           Int?                @map("year_to")
+  generation       String?
+  version          String?
+  bodyType         String?             @map("body_type")
+  applicationTypes CutApplicationType[] @default([INSULFILM]) @map("application_types")
+  notes            String?
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  company  Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  patterns CutPatternCatalogLink[]
+  jobs     CutJob[]
+
+  @@index([companyId, manufacturer, model])
+  @@map("cut_vehicle_catalog")
+}
+
+model CutPattern {
+  id                String           @id @default(uuid())
+  companyId         String           @map("company_id")
+  name              String
+  pieceCategory     CutPieceCategory @map("piece_category")
+  applicationType   CutApplicationType @default(INSULFILM) @map("application_type")
+  status            CutPatternStatus @default(IMPORTED)
+  unit              String           @default("mm")
+  widthMm           Decimal          @map("width_mm") @db.Decimal(18, 4)
+  heightMm          Decimal          @map("height_mm") @db.Decimal(18, 4)
+  geometry          Json
+  svgSource         String?          @map("svg_source") @db.Text
+  origin            String?
+  licenseRef        String?          @map("license_ref")
+  rotationAllowed   Boolean          @default(true) @map("rotation_allowed")
+  maxRotationDeg    Int              @default(180) @map("max_rotation_deg")
+  marginMm          Decimal          @default(0) @map("margin_mm") @db.Decimal(18, 4)
+  validatedAt       DateTime?        @map("validated_at")
+  validatedByUserId String?          @map("validated_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  company   Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  versions  CutPatternVersion[]
+  catalogLinks CutPatternCatalogLink[]
+  jobItems  CutJobItem[]
+
+  @@index([companyId, status])
+  @@index([companyId, pieceCategory])
+  @@map("cut_patterns")
+}
+
+model CutPatternVersion {
+  id          String   @id @default(uuid())
+  patternId   String   @map("pattern_id")
+  version     Int
+  geometry    Json
+  changeNotes String?  @map("change_notes")
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  pattern CutPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@unique([patternId, version])
+  @@map("cut_pattern_versions")
+}
+
+model CutPatternCatalogLink {
+  id        String @id @default(uuid())
+  catalogId String @map("catalog_id")
+  patternId String @map("pattern_id")
+
+  catalog CutVehicleCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  pattern CutPattern        @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogId, patternId])
+  @@map("cut_pattern_catalog_links")
+}
+
+model CutPlotterProfile {
+  id              String                    @id @default(uuid())
+  companyId       String                    @map("company_id")
+  manufacturer    String
+  model           String
+  maxWidthMm      Decimal                   @map("max_width_mm") @db.Decimal(18, 4)
+  maxLengthMm     Decimal?                  @map("max_length_mm") @db.Decimal(18, 4)
+  acceptedFormats Json                      @default("[\"svg\",\"dxf\"]") @map("accepted_formats")
+  integrationMode CutPlotterIntegrationMode @default(FILE_EXPORT_ONLY) @map("integration_mode")
+  config          Json?
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobs    CutJob[]
+
+  @@index([companyId])
+  @@map("cut_plotter_profiles")
+}
+
+model CutJob {
+  id                String             @id @default(uuid())
+  companyId         String             @map("company_id")
+  catalogId         String?            @map("catalog_id")
+  customerId        String?            @map("customer_id")
+  vehicleId         String?            @map("vehicle_id")
+  workOrderId       String?            @map("work_order_id")
+  applicationType   CutApplicationType @map("application_type")
+  materialProductId String?            @map("material_product_id")
+  plotterProfileId  String?            @map("plotter_profile_id")
+  status            CutJobStatus       @default(DRAFT)
+  simulationMode    Boolean            @default(true) @map("simulation_mode")
+  materialWidthMm   Decimal?           @map("material_width_mm") @db.Decimal(18, 4)
+  materialLengthMm  Decimal?           @map("material_length_mm") @db.Decimal(18, 4)
+  utilizationPct    Decimal?           @map("utilization_pct") @db.Decimal(8, 4)
+  layout            Json?
+  operatorUserId    String?            @map("operator_user_id")
+  notes             String?
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  company  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  catalog  CutVehicleCatalog? @relation(fields: [catalogId], references: [id], onDelete: SetNull)
+  customer Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  vehicle  Vehicle?           @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  workOrder WorkOrder?        @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  product  Product?           @relation(fields: [materialProductId], references: [id], onDelete: SetNull)
+  plotter  CutPlotterProfile? @relation(fields: [plotterProfileId], references: [id], onDelete: SetNull)
+  items    CutJobItem[]
+  files    CutJobFile[]
+  events   CutJobEvent[]
+
+  @@index([companyId, status, createdAt])
+  @@map("cut_jobs")
+}
+
+model CutJobItem {
+  id               String           @id @default(uuid())
+  jobId            String           @map("job_id")
+  patternId        String           @map("pattern_id")
+  patternVersion   Int              @map("pattern_version")
+  pieceCategory    CutPieceCategory @map("piece_category")
+  quantity         Int              @default(1)
+  transform        Json?
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  job     CutJob     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  pattern CutPattern @relation(fields: [patternId], references: [id], onDelete: Restrict)
+
+  @@index([jobId])
+  @@map("cut_job_items")
+}
+
+model CutJobFile {
+  id        String            @id @default(uuid())
+  jobId     String            @map("job_id")
+  format    String
+  fileName  String            @map("file_name")
+  content   String            @db.Text
+  purpose   CutJobFilePurpose @default(EXPORT)
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  job CutJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("cut_job_files")
+}
+
+model CutJobEvent {
+  id        String   @id @default(uuid())
+  jobId     String   @map("job_id")
+  eventType String   @map("event_type")
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  job CutJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@map("cut_job_events")
 }

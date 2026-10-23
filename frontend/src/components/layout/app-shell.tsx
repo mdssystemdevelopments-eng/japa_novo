@@ -15,6 +15,7 @@ import {
   UserRound,
   Users,
   Warehouse,
+  Scissors,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -93,6 +94,12 @@ const NAV: NavItem[] = [
     label: 'Financeiro',
     icon: <Wallet className="h-4 w-4" />,
     permission: 'finance.read',
+  },
+  {
+    href: '/corte-automotivo',
+    label: 'Corte automotivo',
+    icon: <Scissors className="h-4 w-4" />,
+    permission: 'cut.read',
   },
   {
     href: '/configuracoes',
