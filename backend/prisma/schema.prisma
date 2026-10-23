@@ -1,0 +1,707 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+enum RoleCode {
+  ADMINISTRADOR
+  GERENTE
+  ATENDENTE
+  TECNICO
+  FINANCEIRO
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PERMISSION_CHANGE
+  STOCK_ADJUST
+  WHATSAPP_CONNECT
+  WHATSAPP_DISCONNECT
+  OTHER
+}
+
+enum CustomerStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  AWAITING_RESPONSE
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum WorkOrderStatus {
+  QUOTED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  INVOICED
+  PAID
+  ARCHIVED
+  CANCELLED
+}
+
+enum PayableStatus {
+  OPEN
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum ReceivableStatus {
+  OPEN
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum FinancialMovementType {
+  INFLOW
+  OUTFLOW
+}
+
+enum WhatsappMessageStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  CANCELLED
+}
+
+enum UnitOfMeasure {
+  UN
+  M
+  M2
+  KG
+  L
+}
+
+enum StockMovementType {
+  GOODS_RECEIPT
+  WORK_ORDER_ISSUE
+  MANUAL_OUT
+  SUPPLIER_RETURN
+  LOSS
+  DAMAGE
+  TRANSFER
+  INVENTORY_ADJUST
+}
+
+enum GoodsReceiptStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  legalName String   @map("legal_name")
+  tradeName String?  @map("trade_name")
+  document  String?
+  phone     String?
+  email     String?
+  timezone  String   @default("America/Sao_Paulo")
+  locale    String   @default("pt-BR")
+  address   Json?
+  settings  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users              User[]
+  customers          Customer[]
+  products           Product[]
+  quotes             Quote[]
+  appointments       Appointment[]
+  workOrders         WorkOrder[]
+  payables           AccountPayable[]
+  receivables        AccountReceivable[]
+  financialMovements FinancialMovement[]
+  goodsReceipts      GoodsReceipt[]
+  auditLogs          AuditLog[]
+  whatsappConfig     WhatsappConfig?
+  vehicles           Vehicle[]
+  bobinas            Bobina[]
+  stockMovements     StockMovement[]
+  suppliers          Supplier[]
+
+  @@map("companies")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  code        RoleCode @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  module      String
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  companyId    String     @map("company_id")
+  email        String
+  passwordHash String     @map("password_hash")
+  fullName     String     @map("full_name")
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  roles        UserRole[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]           @relation("AuditUser")
+
+  @@unique([companyId, email])
+  @@map("users")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  roleId String @map("role_id")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  email     String
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@map("login_attempts")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  companyId  String      @map("company_id")
+  userId     String?     @map("user_id")
+  action     AuditAction
+  entityType String      @map("entity_type")
+  entityId   String?     @map("entity_id")
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation("AuditUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@map("audit_logs")
+}
+
+model Customer {
+  id                       String         @id @default(uuid())
+  companyId                String         @map("company_id")
+  name                     String
+  document                 String?
+  phone                    String?
+  phoneSecondary           String?        @map("phone_secondary")
+  whatsapp                 String?
+  email                    String?
+  postalCode               String?        @map("postal_code")
+  street                   String?
+  streetNumber             String?        @map("street_number")
+  complement               String?
+  district                 String?
+  city                     String?
+  state                    String?
+  contactOrigin            String?        @map("contact_origin")
+  category                 String?
+  internalNotes            String?        @map("internal_notes")
+  communicationPreferences Json?          @map("communication_preferences")
+  marketingOptIn           Boolean        @default(false) @map("marketing_opt_in")
+  status                   CustomerStatus @default(ACTIVE)
+  createdAt                DateTime       @default(now()) @map("created_at")
+  updatedAt                DateTime       @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicles     Vehicle[]
+  quotes       Quote[]
+  appointments Appointment[]
+  workOrders   WorkOrder[]
+  receivables  AccountReceivable[]
+
+  @@index([companyId, name])
+  @@index([companyId, document])
+  @@index([companyId, phone])
+  @@map("customers")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Vehicle {
+  id               String   @id @default(uuid())
+  companyId        String   @map("company_id")
+  customerId       String   @map("customer_id")
+  brand            String
+  model            String
+  plate            String
+  manufactureYear  Int?     @map("manufacture_year")
+  modelYear        Int?     @map("model_year")
+  color            String?
+  chassis          String?
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  quotes       Quote[]
+  appointments Appointment[]
+  workOrders   WorkOrder[]
+
+  @@unique([companyId, plate])
+  @@index([companyId, customerId])
+  @@map("vehicles")
+}
+
+model Product {
+  id               String        @id @default(uuid())
+  companyId        String        @map("company_id")
+  internalCode     String        @map("internal_code")
+  barcode          String?
+  name             String
+  description      String?
+  category         String?
+  brand            String?
+  unitOfMeasure    UnitOfMeasure @default(UN) @map("unit_of_measure")
+  acquisitionCost  Decimal       @default(0) @map("acquisition_cost") @db.Decimal(18, 2)
+  averageCost      Decimal       @default(0) @map("average_cost") @db.Decimal(18, 2)
+  minStock         Decimal       @default(0) @map("min_stock") @db.Decimal(18, 4)
+  stockQty         Decimal       @default(0) @map("stock_qty") @db.Decimal(18, 4)
+  salePrice        Decimal       @default(0) @map("sale_price") @db.Decimal(18, 2)
+  storageLocation  String?       @map("storage_location")
+  ncm              String?
+  filmType         String?       @map("film_type")
+  active           Boolean       @default(true)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bobinas    Bobina[]
+  movements           StockMovement[]
+  goodsReceiptItems     GoodsReceiptItem[]
+  workOrderMaterials    WorkOrderMaterial[]
+
+  @@unique([companyId, internalCode])
+  @@index([companyId, name])
+  @@map("products")
+}
+
+model Bobina {
+  id             String   @id @default(uuid())
+  companyId      String   @map("company_id")
+  productId      String   @map("product_id")
+  code           String
+  lot            String?
+  initialMeters  Decimal  @map("initial_meters") @db.Decimal(18, 4)
+  currentMeters  Decimal  @map("current_meters") @db.Decimal(18, 4)
+  reservedMeters Decimal  @default(0) @map("reserved_meters") @db.Decimal(18, 4)
+  cost           Decimal  @default(0) @db.Decimal(18, 2)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product            Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  workOrderMaterials WorkOrderMaterial[]
+
+  @@unique([companyId, code])
+  @@index([productId])
+  @@map("bobinas")
+}
+
+model StockMovement {
+  id              String            @id @default(uuid())
+  companyId       String            @map("company_id")
+  productId       String            @map("product_id")
+  userId          String            @map("user_id")
+  type            StockMovementType
+  quantity        Decimal           @db.Decimal(18, 4)
+  reason          String
+  referenceType   String?           @map("reference_type")
+  referenceId     String?           @map("reference_id")
+  idempotencyKey  String?           @map("idempotency_key")
+  occurredAt      DateTime          @default(now()) @map("occurred_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, occurredAt])
+  @@index([productId])
+  @@map("stock_movements")
+}
+
+model Quote {
+  id         String      @id @default(uuid())
+  companyId  String      @map("company_id")
+  customerId String      @map("customer_id")
+  vehicleId  String?     @map("vehicle_id")
+  number     Int
+  status     QuoteStatus @default(DRAFT)
+  subtotal   Decimal     @default(0) @map("subtotal") @db.Decimal(18, 2)
+  discount   Decimal     @default(0) @db.Decimal(18, 2)
+  total      Decimal     @default(0) @db.Decimal(18, 2)
+  validUntil DateTime?   @map("valid_until")
+  notes      String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  company  Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicle  Vehicle?    @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  items        QuoteItem[]
+  appointments Appointment[]
+  workOrders   WorkOrder[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String  @id @default(uuid())
+  quoteId     String  @map("quote_id")
+  description String
+  quantity    Decimal @default(1) @db.Decimal(18, 4)
+  unitPrice   Decimal @default(0) @map("unit_price") @db.Decimal(18, 2)
+  total       Decimal @default(0) @db.Decimal(18, 2)
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@map("quote_items")
+}
+
+model Appointment {
+  id                 String            @id @default(uuid())
+  companyId          String            @map("company_id")
+  customerId         String            @map("customer_id")
+  vehicleId          String?           @map("vehicle_id")
+  quoteId            String?           @map("quote_id")
+  serviceDescription String            @map("service_description")
+  startsAt           DateTime          @map("starts_at")
+  endsAt             DateTime          @map("ends_at")
+  status             AppointmentStatus @default(SCHEDULED)
+  notes              String?
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle?    @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  quote      Quote?      @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  workOrders WorkOrder[]
+
+  @@index([companyId, startsAt])
+  @@index([companyId, status])
+  @@map("appointments")
+}
+
+model WorkOrder {
+  id               String          @id @default(uuid())
+  companyId        String          @map("company_id")
+  customerId       String          @map("customer_id")
+  vehicleId        String?         @map("vehicle_id")
+  quoteId          String?         @map("quote_id")
+  appointmentId    String?         @map("appointment_id")
+  number           Int
+  status           WorkOrderStatus @default(QUOTED)
+  total            Decimal         @default(0) @db.Decimal(18, 2)
+  notes            String?
+  checklist        Json?
+  startedAt        DateTime?       @map("started_at")
+  completedAt      DateTime?       @map("completed_at")
+  stockConsumedAt  DateTime?       @map("stock_consumed_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  company     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer    Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicle     Vehicle?               @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  quote       Quote?                 @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  appointment Appointment?           @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  items       WorkOrderItem[]
+  materials   WorkOrderMaterial[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@map("work_orders")
+}
+
+model WorkOrderItem {
+  id          String  @id @default(uuid())
+  workOrderId String  @map("work_order_id")
+  description String
+  quantity    Decimal @default(1) @db.Decimal(18, 4)
+  unitPrice   Decimal @default(0) @map("unit_price") @db.Decimal(18, 2)
+  total       Decimal @default(0) @db.Decimal(18, 2)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@map("work_order_items")
+}
+
+model WorkOrderMaterial {
+  id          String  @id @default(uuid())
+  workOrderId String  @map("work_order_id")
+  productId   String  @map("product_id")
+  bobinaId    String? @map("bobina_id")
+  quantity    Decimal @db.Decimal(18, 4)
+  notes       String?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  bobina    Bobina?   @relation(fields: [bobinaId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId])
+  @@map("work_order_materials")
+}
+
+model Supplier {
+  id                 String   @id @default(uuid())
+  companyId          String   @map("company_id")
+  legalName          String   @map("legal_name")
+  tradeName          String?  @map("trade_name")
+  document           String?
+  stateRegistration  String?  @map("state_registration")
+  email              String?
+  phone              String?
+  paymentTermDays    Int?     @map("payment_term_days")
+  notes              String?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  goodsReceipts GoodsReceipt[]
+
+  @@index([companyId, legalName])
+  @@index([companyId, document])
+  @@map("suppliers")
+}
+
+model GoodsReceipt {
+  id             String             @id @default(uuid())
+  companyId      String             @map("company_id")
+  supplierId     String?            @map("supplier_id")
+  status         GoodsReceiptStatus @default(DRAFT)
+  documentNumber String?            @map("document_number")
+  accessKey      String?            @map("access_key")
+  issuedAt       DateTime?          @map("issued_at")
+  receivedAt     DateTime           @default(now()) @map("received_at")
+  fileName       String?            @map("file_name")
+  filePath       String?            @map("file_path")
+  notes          String?
+  confirmedAt    DateTime?          @map("confirmed_at")
+  confirmedById  String?            @map("confirmed_by_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  company  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items    GoodsReceiptItem[]
+
+  @@unique([companyId, accessKey])
+  @@index([companyId, receivedAt])
+  @@index([companyId, status])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id                  String    @id @default(uuid())
+  receiptId           String    @map("receipt_id")
+  lineNumber          Int       @map("line_number")
+  productId           String?   @map("product_id")
+  description         String
+  ncm                 String?
+  quantity            Decimal   @db.Decimal(18, 4)
+  unit                String?
+  unitCost            Decimal   @default(0) @map("unit_cost") @db.Decimal(18, 2)
+  lot                 String?
+  expiryDate          DateTime? @map("expiry_date")
+  extractConfidence   Float?    @map("extract_confidence")
+
+  receipt GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  product Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([receiptId])
+  @@map("goods_receipt_items")
+}
+
+model AccountPayable {
+  id        String        @id @default(uuid())
+  companyId String        @map("company_id")
+  description String
+  amount    Decimal       @db.Decimal(18, 2)
+  dueDate   DateTime      @map("due_date")
+  status    PayableStatus @default(OPEN)
+  paidAt    DateTime?     @map("paid_at")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, dueDate])
+  @@map("accounts_payable")
+}
+
+model AccountReceivable {
+  id         String           @id @default(uuid())
+  companyId  String           @map("company_id")
+  customerId String?          @map("customer_id")
+  description String
+  amount     Decimal          @db.Decimal(18, 2)
+  dueDate    DateTime         @map("due_date")
+  status     ReceivableStatus @default(OPEN)
+  receivedAt DateTime?        @map("received_at")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, dueDate])
+  @@map("accounts_receivable")
+}
+
+model FinancialMovement {
+  id          String                @id @default(uuid())
+  companyId   String                @map("company_id")
+  type        FinancialMovementType
+  amount      Decimal               @db.Decimal(18, 2)
+  description String
+  occurredAt  DateTime              @map("occurred_at")
+  createdAt   DateTime              @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, occurredAt])
+  @@map("financial_movements")
+}
+
+model WhatsappConfig {
+  id              String   @id @default(uuid())
+  companyId       String   @unique @map("company_id")
+  instanceName    String?  @map("instance_name")
+  connectionState String   @default("disconnected") @map("connection_state")
+  lastCheckedAt   DateTime? @map("last_checked_at")
+  lastError       String?  @map("last_error")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  company  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages WhatsappMessage[]
+
+  @@map("whatsapp_configs")
+}
+
+model WhatsappMessage {
+  id          String                @id @default(uuid())
+  configId    String                @map("config_id")
+  phone       String
+  status      WhatsappMessageStatus @default(PENDING)
+  lastError   String?               @map("last_error")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  config WhatsappConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId, status])
+  @@map("whatsapp_messages")
+}

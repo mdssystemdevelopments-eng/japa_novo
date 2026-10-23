@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: japa-postgres
+    environment:
+      POSTGRES_USER: japa
+      POSTGRES_PASSWORD: japa_dev_password
+      POSTGRES_DB: japa_insufilm
+    ports:
+      - "5433:5432"
+    volumes:
+      - japa_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U japa -d japa_insufilm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: japa-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - japa_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: japa-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: japa_minio
+      MINIO_ROOT_PASSWORD: japa_minio_dev_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - japa_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  japa_pg_data:
+  japa_redis_data:
+  japa_minio_data:
