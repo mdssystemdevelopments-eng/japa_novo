@@ -20,7 +20,7 @@ Credenciais iniciais após seed: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (def
 ## 2. Render — Backend NestJS
 
 1. [dashboard.render.com](https://dashboard.render.com) → **New** → **Web Service**.
-2. Conecte o repositório GitHub `sysdev074-jpg/japa_insufilm`.
+2. Conecte o repositório GitHub `mdssystemdevelopments-eng/japa_novo`.
 3. Configuração:
    - **Root Directory:** `backend`
    - **Runtime:** Node
@@ -52,7 +52,7 @@ Opcional: importar o `render.yaml` na raiz do repo (Blueprint).
 
 ## 3. Vercel — Frontend Next.js
 
-1. [vercel.com/new](https://vercel.com/new) → importar `japa_insufilm`.
+1. [vercel.com/new](https://vercel.com/new) → importar `japa_novo`.
 2. Configuração:
    - **Root Directory:** `frontend`
    - **Framework Preset:** Next.js
