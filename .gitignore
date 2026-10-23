@@ -13,3 +13,6 @@ coverage/
 backend/uploads/
 uploads/
 .turbo/
+
+tsconfig.build.tsbuildinfo
+
