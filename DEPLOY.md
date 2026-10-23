@@ -24,7 +24,8 @@ Credenciais iniciais após seed: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (def
 3. Configuração:
    - **Root Directory:** `backend`
    - **Runtime:** Node
-   - **Build Command:** `npm ci && npx prisma generate && npm run build`
+   - **Build Command:** `npm ci --include=dev && npm run build`  
+     (obrigatório `--include=dev` se `NODE_ENV=production`, senão o Nest CLI não instala)
    - **Start Command:** `npx prisma migrate deploy && npm run start:prod`
    - **Health Check Path:** `/api/health`
 4. **Environment Variables** (obrigatórias):
