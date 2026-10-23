@@ -24,7 +24,10 @@ Credenciais iniciais após seed: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (def
 3. Configuração:
    - **Root Directory:** `backend`
    - **Runtime:** Node
-   - **Build Command:** `npm ci && npm run build` (compila com `tsc`, sem depender do Nest CLI)
+   - **Build Command:** `npm ci && node scripts/render-build.mjs`  
+     (use este comando **literal** — não use `npm run build` se o log ainda mostrar `nest build`)
+   - **Clear build cache & deploy** após trocar o repositório ou o branch.
+   - Confirme em **Settings → Repository** o repo `mdssystemdevelopments-eng/japa_novo`, branch `main`.
    - **Start Command:** `npx prisma migrate deploy && npm run start:prod`
    - **Health Check Path:** `/api/health`
 4. **Environment Variables** (obrigatórias):

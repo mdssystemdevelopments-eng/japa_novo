@@ -5,8 +5,12 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20 <25"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/render-build.mjs",
+    "build:tsc": "tsc -p tsconfig.build.json",
     "postinstall": "prisma generate",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
