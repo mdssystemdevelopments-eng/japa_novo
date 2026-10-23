@@ -57,7 +57,9 @@ export default function LoginPage() {
         </p>
         <h1 className="mt-1 text-xl font-semibold text-slate-900">Entrar</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Use suas credenciais de acesso ao sistema.
+          Use o e-mail e a senha do administrador cadastrados no banco (variáveis{' '}
+          <code className="text-xs">SEED_ADMIN_*</code> na API), não o login da Render ou da
+          Vercel.
         </p>
         <form
           className="mt-6 space-y-4"

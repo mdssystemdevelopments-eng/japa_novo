@@ -13,7 +13,9 @@ npx prisma migrate deploy
 npm run seed
 ```
 
-Credenciais iniciais após seed: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (defina na Render antes do seed).
+Credenciais iniciais **no painel** (não na Render/Vercel): `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` **no PostgreSQL**, criadas pelo `prisma db seed`.
+
+**Erro comum:** colocar e-mail/senha nas variáveis da Render e tentar entrar no site — isso **só funciona depois do seed**. Padrão se nunca customizou: `admin@japainsufilm.local` / `AlterarSenha123!` (senha com 8+ caracteres).
 
 ---
 
@@ -27,7 +29,7 @@ Credenciais iniciais após seed: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (def
    - **Build Command:** `npm ci --include=dev && node scripts/render-build.mjs`
    - **Clear build cache & deploy** após trocar o repositório ou o branch.
    - Confirme em **Settings → Repository** o repo `mdssystemdevelopments-eng/japa_novo`, branch `main`.
-   - **Start Command:** `npx prisma migrate deploy && npm run start:prod`
+   - **Start Command:** `node scripts/render-start.mjs` (migrate + seed + API)
    - **Health Check Path:** `/api/health`
 4. **Environment Variables** (obrigatórias):
 
@@ -41,8 +43,10 @@ Credenciais iniciais após seed: `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (def
 | `JWT_REFRESH_TTL` | `7d` |
 | `CORS_ORIGIN` | URL do Vercel (ex. `https://seu-app.vercel.app`) |
 | `APP_PUBLIC_URL` | mesma URL do Vercel |
-| `SEED_ADMIN_EMAIL` | e-mail do admin |
-| `SEED_ADMIN_PASSWORD` | senha forte inicial |
+| `SEED_ADMIN_EMAIL` | e-mail **válido** do admin do sistema (ex. `seu@gmail.com`) |
+| `SEED_ADMIN_PASSWORD` | senha do **painel** (≥ 8 caracteres) — não é senha da conta Render |
+
+Após alterar `SEED_ADMIN_*`, faça **Redeploy** na Render para o seed atualizar a senha no banco.
 
 5. **Create Web Service** e aguarde o deploy.
 6. Teste: `https://SEU-SERVICO.onrender.com/api/health` → deve retornar `ok`.
