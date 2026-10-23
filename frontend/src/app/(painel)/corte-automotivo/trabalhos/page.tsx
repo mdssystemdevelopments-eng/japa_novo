@@ -34,7 +34,7 @@ export default function TrabalhosCortePage() {
   });
 
   const createJob = useMutation({
-    mutationFn: () =>
+    mutationFn: (): Promise<{ id: string }> =>
       api('/cut-automotive/jobs', {
         method: 'POST',
         body: JSON.stringify({
@@ -42,7 +42,7 @@ export default function TrabalhosCortePage() {
           materialWidthMm: Number(form.materialWidthMm),
           simulationMode: form.simulationMode,
         }),
-      }),
+      }) as Promise<{ id: string }>,
     onSuccess: (job: { id: string }) => {
       qc.invalidateQueries({ queryKey: ['cut-jobs'] });
       window.location.href = `/corte-automotivo/trabalhos/${job.id}`;
