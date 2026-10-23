@@ -759,6 +759,8 @@ enum CutJobStatus {
 enum CutPlotterIntegrationMode {
   FILE_EXPORT_ONLY
   SIMULATION
+  NETWORK_HPGL
+  LOCAL_SERIAL
 }
 
 enum CutJobFilePurpose {

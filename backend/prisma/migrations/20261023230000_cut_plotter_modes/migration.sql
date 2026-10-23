@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "CutPlotterIntegrationMode" ADD VALUE IF NOT EXISTS 'NETWORK_HPGL';
+ALTER TYPE "CutPlotterIntegrationMode" ADD VALUE IF NOT EXISTS 'LOCAL_SERIAL';

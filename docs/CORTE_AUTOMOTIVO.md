@@ -1,26 +1,48 @@
-# Módulo Corte Automotivo — status técnico
+# Módulo Corte Automotivo
+
+Substituto operacional ao fluxo Tech-Cut: moldes próprios/licenciados, nesting, exportação e plotter configurável.
 
 ## Implementado
 
-- **Backend** (`/api/cut-automotive/*`): catálogo de veículos, moldes (import SVG, aprovação), perfis de plotter (exportação de arquivo), trabalhos (itens, nesting, export SVG, simulação).
-- **Motor geométrico** (`backend/src/cut-engine`): unidades mm, validação de polígonos, import SVG básico, nesting shelf com detecção de colisão por bbox, export SVG de layout.
-- **Banco**: migração `20261023214520_cut_automotive` (Neon aplicada).
-- **Permissões**: `cut.read`, `cut.manage`, `cut.validate`.
-- **Frontend**: `/corte-automotivo`, catálogo, moldes, menu integrado.
-- **Testes**: `cut-engine/polygon.spec.ts`.
+- **API** (`/api/cut-automotive/*`): catálogo, moldes (import SVG individual ou lote), aprovação, plotters, trabalhos.
+- **Motor** (`backend/src/cut-engine`):
+  - Nesting com rotações 0/90/180/270, colisão **SAT** entre contornos.
+  - Export **SVG**, **DXF R12** (mm) e **HPGL**.
+  - **Plotter**: `FILE_EXPORT_ONLY`, `NETWORK_HPGL` (TCP porta 9100), `LOCAL_SERIAL` (agente na PC do operador).
+- **Simulação**: `simulationMode` padrão `true` no trabalho — gera arquivos e registra eventos **sem** abrir socket serial/TCP.
+- **Estoque**: após envio HPGL em produção (não simulação), baixa material vinculado ao produto (unidade `M` = comprimento em metros).
+- **Frontend**: catálogo, moldes (+ detalhe), trabalhos (+ fluxo nest/export/dispatch), plotters.
+- **Testes**: `polygon`, `dxf-export`, `hpgl-export`, `nesting-advanced`.
 
-## Pendente / limitações (substituição integral Tech-Cut)
+## Biblioteca de moldes comercial
 
-- Biblioteca comercial de moldes licenciada ou base própria validada (não incluída).
-- Nesting com contorno real (atual: bbox + aviso explícito).
-- DXF/HPG-GL/plotter: apenas perfis + export SVG; **sem** comunicação serial/USB documentada.
-- Editor vetorial avançado (edição de nós, arcos) — visualização e persistência de geometria JSON.
-- Testes físicos em plotter e calibração dimensional.
+Não incluímos base proprietária de terceiros. Fluxo recomendado:
 
-## Plotter
+1. Importar SVG de fonte **licenciada** ou desenhada internamente (`licenseRef` no import).
+2. Validar visualmente e aprovar (`cut.validate`).
+3. Vincular ao catálogo de veículos.
 
-Modo padrão: **simulação** + **FILE_EXPORT_ONLY**. Não há envio falso à máquina.
+Import em lote: `POST /api/cut-automotive/patterns/import/batch`.
 
-## Importação SVG
+## Plotter serial (USB)
 
-Moldes importados ficam **PENDING_VALIDATION** até usuário com `cut.validate` aprovar.
+O backend em cloud **não** acessa COM/USB. Na máquina local:
+
+```bash
+cd backend
+npm install serialport   # apenas na estação de corte
+node scripts/plotter-serial-agent.mjs --port COM3 --file corte.hpgl
+```
+
+Perfil `LOCAL_SERIAL` gera HPGL/DXF para download; o operador envia com o agente.
+
+## Migrações
+
+- `20261023214520_cut_automotive` — tabelas do módulo.
+- `20261023230000_cut_plotter_modes` — enum `NETWORK_HPGL`, `LOCAL_SERIAL`.
+
+## Pendências realistas
+
+- Nesting ótimo (não bin packing industrial).
+- Editor vetorial completo (nós/arcos) — hoje preview + geometria JSON.
+- Calibração física por modelo de plotter (escala HPGL).

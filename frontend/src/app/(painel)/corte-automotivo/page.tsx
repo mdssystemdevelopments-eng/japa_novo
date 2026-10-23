@@ -24,7 +24,7 @@ export default function CorteAutomotivoPage() {
         title="Corte automotivo"
         description="Módulo profissional de moldes, nesting e exportação (substituto operacional ao fluxo Tech-Cut)."
       />
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Link href="/corte-automotivo/catalogo" className="rounded-lg border bg-white p-4 hover:bg-slate-50">
           <h2 className="font-medium">Catálogo de veículos</h2>
           <p className="mt-1 text-sm text-slate-600">Fabricante, modelo, anos e compatibilidade de moldes.</p>
@@ -36,6 +36,10 @@ export default function CorteAutomotivoPage() {
         <Link href="/corte-automotivo/trabalhos" className="rounded-lg border bg-white p-4 hover:bg-slate-50">
           <h2 className="font-medium">Trabalhos de corte</h2>
           <p className="mt-1 text-sm text-slate-600">Preparação, nesting, exportação e simulação.</p>
+        </Link>
+        <Link href="/corte-automotivo/plotters" className="rounded-lg border bg-white p-4 hover:bg-slate-50">
+          <h2 className="font-medium">Plotters</h2>
+          <p className="mt-1 text-sm text-slate-600">TCP HPGL, exportação manual ou agente serial local.</p>
         </Link>
       </div>
       {canManage ? (

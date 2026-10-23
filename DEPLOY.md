@@ -54,6 +54,15 @@ Opcional: importar o `render.yaml` na raiz do repo (Blueprint).
 
 ## 3. Vercel — Frontend Next.js
 
+### Hobby + repo privado (erro “commit author did not have contributing access”)
+
+No plano **Hobby**, repositório **privado** só faz deploy automático para o dono do time Vercel. Opções:
+
+1. **Repositório público** (este projeto pode usar `visibility: public` no GitHub — sem segredos no código).
+2. **Pro** na Vercel e membros no time.
+3. **GitHub Actions** (`.github/workflows/vercel-frontend.yml`) com secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` (Vercel → Project Settings → General).
+4. **CLI local:** `cd frontend && vercel login && vercel --prod` (ignora checagem de autor do Git).
+
 1. [vercel.com/new](https://vercel.com/new) → importar `japa_novo`.
 2. Configuração:
    - **Root Directory:** `frontend`

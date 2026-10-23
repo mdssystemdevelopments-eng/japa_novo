@@ -10,10 +10,16 @@ import {
   CutPatternStatus,
   CutPieceCategory,
   Prisma,
+  StockMovementType,
 } from '@prisma/client';
+import { exportLayoutDxf } from '../cut-engine/dxf-export';
 import { exportLayoutSvg } from '../cut-engine/export-svg';
-import { nestPiecesShelf } from '../cut-engine/nesting';
+import { exportLayoutHpgl } from '../cut-engine/hpgl-export';
+import { nestPiecesAdvanced } from '../cut-engine/nesting-advanced';
+import { dispatchToPlotter } from '../cut-engine/plotter/plotter-dispatch';
+import { PlotterProfileConfig } from '../cut-engine/plotter/plotter.types';
 import { importSvgContent } from '../cut-engine/svg-import';
+import { resolveStockDelta } from '../stock/stock-movement.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -234,6 +240,8 @@ export class CutAutomotiveService {
       maxWidthMm: number;
       maxLengthMm?: number;
       acceptedFormats?: string[];
+      integrationMode?: 'FILE_EXPORT_ONLY' | 'NETWORK_HPGL' | 'LOCAL_SERIAL' | 'SIMULATION';
+      config?: PlotterProfileConfig;
     },
   ) {
     return this.prisma.cutPlotterProfile.create({
@@ -243,9 +251,29 @@ export class CutAutomotiveService {
         model: data.model,
         maxWidthMm: data.maxWidthMm,
         maxLengthMm: data.maxLengthMm,
-        acceptedFormats: data.acceptedFormats ?? ['svg'],
+        acceptedFormats: data.acceptedFormats ?? ['svg', 'dxf', 'hpgl'],
+        integrationMode: data.integrationMode ?? 'FILE_EXPORT_ONLY',
+        config: data.config ?? {},
       },
     });
+  }
+
+  getJob(companyId: string, jobId: string) {
+    return this.prisma.cutJob
+      .findFirst({
+        where: { id: jobId, companyId },
+        include: {
+          catalog: true,
+          items: { include: { pattern: true } },
+          files: true,
+          events: { orderBy: { createdAt: 'desc' }, take: 20 },
+          plotter: true,
+        },
+      })
+      .then((j) => {
+        if (!j) throw new NotFoundException('Trabalho não encontrado.');
+        return j;
+      });
   }
 
   // --- Trabalhos ---
@@ -341,10 +369,12 @@ export class CutAutomotiveService {
         id: `${item.id}-${i}`,
         points,
         marginMm: Number(item.pattern.marginMm),
+        rotationAllowed: item.pattern.rotationAllowed,
+        maxRotationDeg: item.pattern.maxRotationDeg,
       }));
     });
 
-    const nested = nestPiecesShelf(pieces, width, spacingMm);
+    const nested = nestPiecesAdvanced(pieces, width, spacingMm);
     const layout = { placed: nested.placed, warnings: nested.warnings };
 
     return this.prisma.cutJob.update({
@@ -358,10 +388,21 @@ export class CutAutomotiveService {
     });
   }
 
+  private layoutPlaced(job: { layout: unknown }) {
+    const layout = job.layout as {
+      placed?: { id: string; points: { x: number; y: number }[] }[];
+    } | null;
+    if (!layout?.placed?.length) {
+      throw new BadRequestException('Execute o nesting antes de exportar.');
+    }
+    return layout.placed;
+  }
+
   async exportJob(
     companyId: string,
     jobId: string,
     confirm: boolean,
+    formats: string[] = ['svg', 'dxf', 'hpgl'],
   ) {
     const job = await this.prisma.cutJob.findFirst({
       where: { id: jobId, companyId },
@@ -377,28 +418,44 @@ export class CutAutomotiveService {
       }
     }
 
-    const layout = job.layout as {
-      placed?: { id: string; points: { x: number; y: number }[] }[];
-    } | null;
-    if (!layout?.placed?.length) {
-      throw new BadRequestException('Execute o nesting antes de exportar.');
+    const placed = this.layoutPlaced(job);
+    const w = Number(job.materialWidthMm);
+    const len = Number(job.materialLengthMm ?? 0);
+    const set = new Set(formats.map((f) => f.toLowerCase()));
+
+    if (set.has('svg')) {
+      await this.prisma.cutJobFile.create({
+        data: {
+          jobId,
+          format: 'svg',
+          fileName: `cut-job-${jobId}.svg`,
+          content: exportLayoutSvg(placed, w, len),
+          purpose: 'EXPORT',
+        },
+      });
     }
-
-    const svg = exportLayoutSvg(
-      layout.placed,
-      Number(job.materialWidthMm),
-      Number(job.materialLengthMm ?? 0),
-    );
-
-    await this.prisma.cutJobFile.create({
-      data: {
-        jobId,
-        format: 'svg',
-        fileName: `cut-job-${jobId}.svg`,
-        content: svg,
-        purpose: 'EXPORT',
-      },
-    });
+    if (set.has('dxf')) {
+      await this.prisma.cutJobFile.create({
+        data: {
+          jobId,
+          format: 'dxf',
+          fileName: `cut-job-${jobId}.dxf`,
+          content: exportLayoutDxf(placed, w, len),
+          purpose: 'EXPORT',
+        },
+      });
+    }
+    if (set.has('hpgl') || set.has('plt')) {
+      await this.prisma.cutJobFile.create({
+        data: {
+          jobId,
+          format: 'hpgl',
+          fileName: `cut-job-${jobId}.hpgl`,
+          content: exportLayoutHpgl(placed),
+          purpose: 'EXPORT',
+        },
+      });
+    }
 
     const nextStatus = job.simulationMode ? CutJobStatus.SIMULATED : CutJobStatus.READY_EXPORT;
 
@@ -407,8 +464,8 @@ export class CutAutomotiveService {
         jobId,
         eventType: job.simulationMode ? 'SIMULATION_EXPORT' : 'FILE_EXPORT',
         message: job.simulationMode
-          ? 'Arquivo gerado em modo simulação (nenhum envio à plotter).'
-          : 'Arquivo exportado; envio à plotter depende do perfil configurado.',
+          ? 'Arquivos gerados em modo simulação.'
+          : 'Arquivos SVG/DXF/HPGL exportados.',
       },
     });
 
@@ -416,5 +473,128 @@ export class CutAutomotiveService {
       where: { id: jobId },
       data: { status: nextStatus },
     });
+  }
+
+  async dispatchPlotter(
+    companyId: string,
+    userId: string,
+    jobId: string,
+    plotterProfileId: string,
+    confirm: boolean,
+  ) {
+    if (!confirm) {
+      throw new BadRequestException('Confirme o envio à plotter.');
+    }
+    const job = await this.getJob(companyId, jobId);
+    const plotter = await this.prisma.cutPlotterProfile.findFirst({
+      where: { id: plotterProfileId, companyId },
+    });
+    if (!plotter) throw new NotFoundException('Perfil de plotter não encontrado.');
+
+    const placed = this.layoutPlaced(job);
+    const formats = (plotter.acceptedFormats as string[]) ?? ['hpgl'];
+    const result = await dispatchToPlotter({
+      integrationMode: plotter.integrationMode,
+      config: (plotter.config as PlotterProfileConfig) ?? {},
+      simulationMode: job.simulationMode,
+      placed,
+      materialWidthMm: Number(job.materialWidthMm),
+      materialLengthMm: Number(job.materialLengthMm ?? 0),
+      acceptedFormats: formats,
+      jobId,
+    });
+
+    for (const file of result.files ?? []) {
+      await this.prisma.cutJobFile.create({
+        data: {
+          jobId,
+          format: file.format,
+          fileName: file.fileName,
+          content: file.content,
+          purpose: result.state === 'SIMULATION' ? 'PREVIEW' : 'EXPORT',
+        },
+      });
+    }
+
+    let status = job.status;
+    if (result.state === 'NETWORK_SENT') status = CutJobStatus.SENT;
+    else if (result.state === 'SIMULATION') status = CutJobStatus.SIMULATED;
+    else if (result.state === 'FILE_READY') status = CutJobStatus.READY_EXPORT;
+
+    await this.prisma.cutJobEvent.create({
+      data: {
+        jobId,
+        eventType: `PLOTTER_${result.state}`,
+        message: result.message,
+        metadata: { bytesSent: result.bytesSent, plotterProfileId },
+      },
+    });
+
+    const updated = await this.prisma.cutJob.update({
+      where: { id: jobId },
+      data: { plotterProfileId, status },
+    });
+
+    if (
+      !job.simulationMode &&
+      result.state === 'NETWORK_SENT' &&
+      job.materialProductId &&
+      job.materialLengthMm
+    ) {
+      await this.deductMaterialForCut(companyId, userId, jobId, job.materialProductId, Number(job.materialLengthMm));
+    }
+
+    return { job: updated, dispatch: result };
+  }
+
+  private async deductMaterialForCut(
+    companyId: string,
+    userId: string,
+    jobId: string,
+    productId: string,
+    lengthMm: number,
+  ) {
+    const product = await this.prisma.product.findFirst({ where: { id: productId, companyId } });
+    if (!product) return;
+    const qty = product.unitOfMeasure === 'M' ? lengthMm / 1000 : lengthMm;
+    const delta = resolveStockDelta(StockMovementType.WORK_ORDER_ISSUE, qty);
+    const current = Number(product.stockQty);
+    const next = current + delta;
+    if (next < 0) throw new ConflictException('Estoque insuficiente para o material do corte.');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.stockMovement.create({
+        data: {
+          companyId,
+          productId,
+          userId,
+          type: StockMovementType.WORK_ORDER_ISSUE,
+          quantity: qty,
+          reason: `Corte automotivo ${jobId}`,
+          referenceType: 'CutJob',
+          referenceId: jobId,
+          idempotencyKey: `cut-job-${jobId}-material`,
+        },
+      });
+      await tx.product.update({ where: { id: productId }, data: { stockQty: next } });
+    });
+  }
+
+  async importPatternBatch(
+    companyId: string,
+    userId: string,
+    items: {
+      name: string;
+      pieceCategory: CutPieceCategory;
+      svgContent: string;
+      catalogId?: string;
+      licenseRef?: string;
+    }[],
+  ) {
+    const results = [];
+    for (const item of items) {
+      results.push(await this.importPattern(companyId, userId, { ...item, origin: 'batch' }));
+    }
+    return results;
   }
 }

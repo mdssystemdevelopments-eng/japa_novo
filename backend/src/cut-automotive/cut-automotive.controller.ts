@@ -81,6 +81,24 @@ export class CutAutomotiveController {
     return this.cut.getPattern(user.companyId, id);
   }
 
+  @Post('patterns/import/batch')
+  @RequirePermissions(PERMISSIONS.CUT_MANAGE)
+  importBatch(
+    @CurrentUser() user: AuthUserPayload,
+    @Body()
+    body: {
+      items: {
+        name: string;
+        pieceCategory: CutPieceCategory;
+        svgContent: string;
+        catalogId?: string;
+        licenseRef?: string;
+      }[];
+    },
+  ) {
+    return this.cut.importPatternBatch(user.companyId, user.sub, body.items ?? []);
+  }
+
   @Post('patterns/import')
   @RequirePermissions(PERMISSIONS.CUT_MANAGE)
   importPattern(
@@ -138,6 +156,8 @@ export class CutAutomotiveController {
       maxWidthMm: number;
       maxLengthMm?: number;
       acceptedFormats?: string[];
+      integrationMode?: 'FILE_EXPORT_ONLY' | 'NETWORK_HPGL' | 'LOCAL_SERIAL' | 'SIMULATION';
+      config?: { host?: string; port?: number; serialPort?: string; baudRate?: number };
     },
   ) {
     return this.cut.createPlotter(user.companyId, body);
@@ -147,6 +167,12 @@ export class CutAutomotiveController {
   @RequirePermissions(PERMISSIONS.CUT_READ)
   listJobs(@CurrentUser() user: AuthUserPayload) {
     return this.cut.listJobs(user.companyId);
+  }
+
+  @Get('jobs/:id')
+  @RequirePermissions(PERMISSIONS.CUT_READ)
+  getJob(@CurrentUser() user: AuthUserPayload, @Param('id') id: string) {
+    return this.cut.getJob(user.companyId, id);
   }
 
   @Post('jobs')
@@ -193,8 +219,30 @@ export class CutAutomotiveController {
   export(
     @CurrentUser() user: AuthUserPayload,
     @Param('id') id: string,
-    @Body() body: { confirm: boolean },
+    @Body() body: { confirm: boolean; formats?: string[] },
   ) {
-    return this.cut.exportJob(user.companyId, id, body.confirm === true);
+    return this.cut.exportJob(
+      user.companyId,
+      id,
+      body.confirm === true,
+      body.formats,
+    );
+  }
+
+  @Post('jobs/:id/dispatch')
+  @RequirePermissions(PERMISSIONS.CUT_MANAGE)
+  dispatch(
+    @CurrentUser() user: AuthUserPayload,
+    @Param('id') id: string,
+    @Body()
+    body: { plotterProfileId: string; confirm: boolean },
+  ) {
+    return this.cut.dispatchPlotter(
+      user.companyId,
+      user.sub,
+      id,
+      body.plotterProfileId,
+      body.confirm === true,
+    );
   }
 }
